@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="102.4" fill="#4f46e5"/>
+  <text x="50%" y="55%" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="143.36" fill="white">My</text>
+  <text x="50%" y="78%" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="102.4" fill="#818cf8">Meds</text>
+  <rect x="179.2" y="40.96" width="153.6" height="76.8" rx="15.36" fill="white" opacity="0.9"/>
+  <line x1="256" y1="51.2" x2="256" y2="107.52" stroke="#4f46e5" stroke-width="15.36" stroke-linecap="round"/>
+  <line x1="215.04" y1="79.36" x2="296.96" y2="79.36" stroke="#4f46e5" stroke-width="15.36" stroke-linecap="round"/>
+</svg>
