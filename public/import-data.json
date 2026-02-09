@@ -1,0 +1,426 @@
+{
+  "medications": [
+    {
+      "id": "8681fa60-6fb4-49d2-8d96-0bb5213629db",
+      "name": "Neltrexone",
+      "dosage": "50mg",
+      "unit": "tablet",
+      "frequency": "daily",
+      "timesPerDay": 1,
+      "scheduledTimes": [
+        "05:00"
+      ],
+      "tabletsPerDose": 1,
+      "currentStock": 51,
+      "repeatsRemaining": 2,
+      "lowStockThreshold": 7,
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-02-07T03:08:06.205Z",
+      "color": "#d97706"
+    },
+    {
+      "id": "8ebe7289-0db6-4a98-909a-1ac43b5cdc20",
+      "name": "Paracetamol Osteo",
+      "dosage": "665mg",
+      "unit": "tablet",
+      "frequency": "three_times_daily",
+      "timesPerDay": 3,
+      "scheduledTimes": [
+        "06:00",
+        "12:00",
+        "18:00"
+      ],
+      "tabletsPerDose": 2,
+      "currentStock": 30,
+      "repeatsRemaining": 0,
+      "lowStockThreshold": 12,
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-02-07T03:54:28.367Z",
+      "color": "#4f46e5"
+    },
+    {
+      "id": "cbb0f9d1-cdc2-417d-b999-bcbf8a3be8dc",
+      "name": "Celecobix",
+      "dosage": "200mg",
+      "unit": "tablet",
+      "frequency": "daily",
+      "timesPerDay": 1,
+      "scheduledTimes": [
+        "06:00"
+      ],
+      "tabletsPerDose": 1,
+      "currentStock": 29,
+      "repeatsRemaining": 3,
+      "lowStockThreshold": 7,
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-02-07T04:00:40.168Z",
+      "color": "#2563eb"
+    },
+    {
+      "id": "6eed172e-c784-42c7-b626-e322944f0a50",
+      "name": "Indapamide Hemihydrate",
+      "dosage": "2.5mg",
+      "unit": "tablet",
+      "frequency": "daily",
+      "timesPerDay": 1,
+      "scheduledTimes": [
+        "06:00"
+      ],
+      "tabletsPerDose": 1,
+      "currentStock": 89,
+      "repeatsRemaining": 0,
+      "lowStockThreshold": 7,
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-02-07T04:01:25.633Z",
+      "color": "#7c3aed"
+    },
+    {
+      "id": "4490dbb3-dcbb-42df-b5cb-1fbca00e080f",
+      "name": "Perindopril Arginine",
+      "dosage": "10mg",
+      "unit": "tablet",
+      "frequency": "daily",
+      "timesPerDay": 1,
+      "scheduledTimes": [
+        "06:00"
+      ],
+      "tabletsPerDose": 1,
+      "currentStock": 45,
+      "repeatsRemaining": 4,
+      "lowStockThreshold": 7,
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-02-07T04:02:04.835Z",
+      "color": "#16a34a"
+    },
+    {
+      "id": "d0e273bf-768f-4d00-af4e-236dd0649727",
+      "name": "Verapamil",
+      "dosage": "180mg",
+      "unit": "tablet",
+      "frequency": "daily",
+      "timesPerDay": 1,
+      "scheduledTimes": [
+        "06:00"
+      ],
+      "tabletsPerDose": 1,
+      "currentStock": 56,
+      "repeatsRemaining": 4,
+      "lowStockThreshold": 7,
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-02-07T04:02:44.114Z",
+      "color": "#7c3aed"
+    },
+    {
+      "id": "9ce10b7d-70a2-4a09-a4bd-cf0c746f7f71",
+      "name": "Thiamine",
+      "dosage": "100mg",
+      "unit": "tablet",
+      "frequency": "daily",
+      "timesPerDay": 1,
+      "scheduledTimes": [
+        "06:00"
+      ],
+      "tabletsPerDose": 1,
+      "currentStock": 105,
+      "repeatsRemaining": 2,
+      "lowStockThreshold": 7,
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-02-07T04:03:18.033Z",
+      "color": "#7c3aed"
+    },
+    {
+      "id": "7065996d-d868-41fa-8139-e55025bc8b90",
+      "name": "Allopurinol",
+      "dosage": "100mg",
+      "unit": "tablet",
+      "frequency": "daily",
+      "timesPerDay": 1,
+      "scheduledTimes": [
+        "06:00"
+      ],
+      "tabletsPerDose": 1,
+      "currentStock": 170,
+      "repeatsRemaining": 1,
+      "lowStockThreshold": 7,
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-02-07T04:05:24.918Z",
+      "color": "#dc2626"
+    },
+    {
+      "id": "0be104f0-ca42-4642-9e3e-34995ecb8d2d",
+      "name": "Sertraline",
+      "dosage": "50mg",
+      "unit": "tablet",
+      "frequency": "daily",
+      "timesPerDay": 1,
+      "scheduledTimes": [
+        "08:00"
+      ],
+      "tabletsPerDose": 2,
+      "currentStock": 28,
+      "repeatsRemaining": 3,
+      "lowStockThreshold": 7,
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-02-07T04:06:43.210Z",
+      "color": "#16a34a"
+    },
+    {
+      "id": "a608bac6-4d4c-4223-822a-c8ea3ef8e328",
+      "name": "Phenergan",
+      "dosage": "25mg",
+      "unit": "tablet",
+      "frequency": "as_needed",
+      "timesPerDay": 1,
+      "scheduledTimes": [
+        "08:00"
+      ],
+      "tabletsPerDose": 2,
+      "currentStock": 23,
+      "repeatsRemaining": 1,
+      "lowStockThreshold": 7,
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-02-07T10:17:01.051Z",
+      "color": "#2563eb"
+    },
+    {
+      "id": "5071f8c3-86b7-480b-9dd7-40549f33c401",
+      "name": "Melatonin",
+      "dosage": "2mg",
+      "unit": "tablet",
+      "frequency": "as_needed",
+      "timesPerDay": 1,
+      "scheduledTimes": [
+        "20:00"
+      ],
+      "tabletsPerDose": 1,
+      "currentStock": 30,
+      "repeatsRemaining": 0,
+      "lowStockThreshold": 7,
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-02-07T10:18:55.450Z",
+      "color": "#7c3aed"
+    },
+    {
+      "id": "daa787fb-58ed-46c0-8c80-ae4d270331bc",
+      "name": "Prazosin",
+      "dosage": "1mg",
+      "unit": "tablet",
+      "frequency": "as_needed",
+      "timesPerDay": 1,
+      "scheduledTimes": [
+        "20:00"
+      ],
+      "tabletsPerDose": 2,
+      "currentStock": 71,
+      "repeatsRemaining": 0,
+      "lowStockThreshold": 7,
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-02-07T10:20:41.316Z",
+      "color": "#9333ea"
+    }
+  ],
+  "doseLogs": [
+    {
+      "id": "0dea4c7b-e5e1-4d18-b57b-d33fe35f4fd2",
+      "medicationId": "8681fa60-6fb4-49d2-8d96-0bb5213629db",
+      "scheduledDate": "2026-02-07",
+      "scheduledTime": "05:00",
+      "status": "taken",
+      "takenAt": "2026-02-07T04:03:22.414Z",
+      "createdAt": "2026-02-07T03:08:06.205Z"
+    },
+    {
+      "id": "d40ea592-c4f1-40d3-9548-302baf064655",
+      "medicationId": "8ebe7289-0db6-4a98-909a-1ac43b5cdc20",
+      "scheduledDate": "2026-02-07",
+      "scheduledTime": "06:00",
+      "status": "taken",
+      "takenAt": "2026-02-07T04:03:27.050Z",
+      "createdAt": "2026-02-07T03:54:28.367Z"
+    },
+    {
+      "id": "53f131cc-4ee8-4393-93e1-58a49b2be3ff",
+      "medicationId": "8ebe7289-0db6-4a98-909a-1ac43b5cdc20",
+      "scheduledDate": "2026-02-07",
+      "scheduledTime": "12:00",
+      "status": "taken",
+      "takenAt": "2026-02-07T04:15:51.824Z",
+      "createdAt": "2026-02-07T03:54:28.367Z"
+    },
+    {
+      "id": "697e6355-e966-4d84-b312-c0dae40e896e",
+      "medicationId": "8ebe7289-0db6-4a98-909a-1ac43b5cdc20",
+      "scheduledDate": "2026-02-07",
+      "scheduledTime": "18:00",
+      "status": "taken",
+      "takenAt": "2026-02-07T09:51:53.106Z",
+      "createdAt": "2026-02-07T03:54:28.367Z"
+    },
+    {
+      "id": "6501ee62-4f15-450a-b051-5be381d10f1f",
+      "medicationId": "cbb0f9d1-cdc2-417d-b999-bcbf8a3be8dc",
+      "scheduledDate": "2026-02-07",
+      "scheduledTime": "06:00",
+      "status": "taken",
+      "takenAt": "2026-02-07T05:47:16.772Z",
+      "createdAt": "2026-02-07T04:00:40.168Z"
+    },
+    {
+      "id": "5bfb2e4b-5094-4e66-8b53-fef7e4f45aa6",
+      "medicationId": "6eed172e-c784-42c7-b626-e322944f0a50",
+      "scheduledDate": "2026-02-07",
+      "scheduledTime": "06:00",
+      "status": "taken",
+      "takenAt": "2026-02-07T05:47:19.014Z",
+      "createdAt": "2026-02-07T04:01:25.633Z"
+    },
+    {
+      "id": "dc44fd32-d9b0-4aa3-94a8-0326dc085d5c",
+      "medicationId": "4490dbb3-dcbb-42df-b5cb-1fbca00e080f",
+      "scheduledDate": "2026-02-07",
+      "scheduledTime": "06:00",
+      "status": "taken",
+      "takenAt": "2026-02-07T04:03:33.864Z",
+      "createdAt": "2026-02-07T04:02:04.835Z"
+    },
+    {
+      "id": "a3ee4d4e-bc18-49a3-bc3e-85c5de364b4a",
+      "medicationId": "d0e273bf-768f-4d00-af4e-236dd0649727",
+      "scheduledDate": "2026-02-07",
+      "scheduledTime": "06:00",
+      "status": "taken",
+      "takenAt": "2026-02-07T04:03:35.086Z",
+      "createdAt": "2026-02-07T04:02:44.114Z"
+    },
+    {
+      "id": "daf9042d-28a3-4dbc-8967-65798d140d07",
+      "medicationId": "9ce10b7d-70a2-4a09-a4bd-cf0c746f7f71",
+      "scheduledDate": "2026-02-07",
+      "scheduledTime": "06:00",
+      "status": "taken",
+      "takenAt": "2026-02-07T04:03:37.455Z",
+      "createdAt": "2026-02-07T04:03:18.033Z"
+    },
+    {
+      "id": "2f067b70-4d76-4603-9c52-f6e384146e3c",
+      "medicationId": "7065996d-d868-41fa-8139-e55025bc8b90",
+      "scheduledDate": "2026-02-07",
+      "scheduledTime": "06:00",
+      "status": "taken",
+      "takenAt": "2026-02-07T04:05:31.206Z",
+      "createdAt": "2026-02-07T04:05:24.918Z"
+    },
+    {
+      "id": "f7d85f59-a917-44b3-b104-c4fad7ce618c",
+      "medicationId": "0be104f0-ca42-4642-9e3e-34995ecb8d2d",
+      "scheduledDate": "2026-02-07",
+      "scheduledTime": "08:00",
+      "status": "taken",
+      "takenAt": "2026-02-07T05:47:21.046Z",
+      "createdAt": "2026-02-07T04:06:43.211Z"
+    }
+  ],
+  "stockEvents": [
+    {
+      "id": "595d118a-cd30-46e6-a3f2-f5cac8c50c81",
+      "medicationId": "8681fa60-6fb4-49d2-8d96-0bb5213629db",
+      "type": "consumed",
+      "quantity": 1,
+      "note": "Took 1 tablet at 5:00 AM",
+      "createdAt": "2026-02-07T04:03:22.415Z"
+    },
+    {
+      "id": "17e5ee7f-cf91-483a-bf63-4c5d50ab462f",
+      "medicationId": "8ebe7289-0db6-4a98-909a-1ac43b5cdc20",
+      "type": "consumed",
+      "quantity": 2,
+      "note": "Took 2 tablet at 6:00 AM",
+      "createdAt": "2026-02-07T04:03:27.051Z"
+    },
+    {
+      "id": "0b11ebb9-4fb9-466d-a344-b6310e1c6e74",
+      "medicationId": "4490dbb3-dcbb-42df-b5cb-1fbca00e080f",
+      "type": "consumed",
+      "quantity": 1,
+      "note": "Took 1 tablet at 6:00 AM",
+      "createdAt": "2026-02-07T04:03:33.864Z"
+    },
+    {
+      "id": "6e5bde6b-ac6b-4b5e-b21f-18ea5ee10cfe",
+      "medicationId": "d0e273bf-768f-4d00-af4e-236dd0649727",
+      "type": "consumed",
+      "quantity": 1,
+      "note": "Took 1 tablet at 6:00 AM",
+      "createdAt": "2026-02-07T04:03:35.086Z"
+    },
+    {
+      "id": "230411dc-f235-44d8-8f6f-4c42a5da6924",
+      "medicationId": "9ce10b7d-70a2-4a09-a4bd-cf0c746f7f71",
+      "type": "consumed",
+      "quantity": 1,
+      "note": "Took 1 tablet at 6:00 AM",
+      "createdAt": "2026-02-07T04:03:37.455Z"
+    },
+    {
+      "id": "f9764750-3b38-4cfa-91a9-cff1e8a6e603",
+      "medicationId": "7065996d-d868-41fa-8139-e55025bc8b90",
+      "type": "consumed",
+      "quantity": 1,
+      "note": "Took 1 tablet at 6:00 AM",
+      "createdAt": "2026-02-07T04:05:31.207Z"
+    },
+    {
+      "id": "2bb79101-93e2-4c2e-9cc7-4c0fe5f3eb1f",
+      "medicationId": "8ebe7289-0db6-4a98-909a-1ac43b5cdc20",
+      "type": "consumed",
+      "quantity": 2,
+      "note": "Took 2 tablet at 12:00 PM",
+      "createdAt": "2026-02-07T04:15:51.825Z"
+    },
+    {
+      "id": "4c807406-9f56-4357-baad-283f3caaa7fc",
+      "medicationId": "cbb0f9d1-cdc2-417d-b999-bcbf8a3be8dc",
+      "type": "consumed",
+      "quantity": 1,
+      "note": "Took 1 tablet at 6:00 AM",
+      "createdAt": "2026-02-07T05:47:16.773Z"
+    },
+    {
+      "id": "05644eeb-6e63-4aa7-b403-d7ac716d73ed",
+      "medicationId": "6eed172e-c784-42c7-b626-e322944f0a50",
+      "type": "consumed",
+      "quantity": 1,
+      "note": "Took 1 tablet at 6:00 AM",
+      "createdAt": "2026-02-07T05:47:19.015Z"
+    },
+    {
+      "id": "7c563688-8d6f-4d75-84fb-e621c214f390",
+      "medicationId": "0be104f0-ca42-4642-9e3e-34995ecb8d2d",
+      "type": "consumed",
+      "quantity": 2,
+      "note": "Took 2 tablet at 8:00 AM",
+      "createdAt": "2026-02-07T05:47:21.046Z"
+    },
+    {
+      "id": "7fd2e481-a445-44d6-9ff1-49f0375073b0",
+      "medicationId": "8ebe7289-0db6-4a98-909a-1ac43b5cdc20",
+      "type": "consumed",
+      "quantity": 2,
+      "note": "Took 2 tablet at 6:00 PM",
+      "createdAt": "2026-02-07T09:51:53.108Z"
+    }
+  ],
+  "exportedAt": "2026-02-07T22:40:34.305Z"
+}

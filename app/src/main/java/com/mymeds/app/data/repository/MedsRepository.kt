@@ -1,0 +1,477 @@
+package com.mymeds.app.data.repository
+
+import com.mymeds.app.data.db.AppDatabase
+import com.mymeds.app.data.model.AdherenceStats
+import com.mymeds.app.data.model.DayAdherence
+import com.mymeds.app.data.model.DoseLog
+import com.mymeds.app.data.model.MED_COLORS
+import com.mymeds.app.data.model.Medication
+import com.mymeds.app.data.model.StockEvent
+import kotlinx.coroutines.flow.Flow
+import java.text.SimpleDateFormat
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import java.util.Locale
+import java.util.UUID
+
+class MedsRepository(private val db: AppDatabase) {
+
+    private val medicationDao = db.medicationDao()
+    private val doseLogDao = db.doseLogDao()
+    private val stockEventDao = db.stockEventDao()
+
+    // ── Medication operations ────────────────────────────────────────────────
+
+    fun getAllMedications(): Flow<List<Medication>> = medicationDao.getAll()
+
+    suspend fun getAllMedicationsOnce(): List<Medication> = medicationDao.getAllOnce()
+
+    suspend fun getMedicationById(id: String): Medication? = medicationDao.getById(id)
+
+    suspend fun upsertMedication(med: Medication) = medicationDao.upsert(med)
+
+    suspend fun deleteMedication(id: String) {
+        doseLogDao.deleteForMedication(id)
+        medicationDao.delete(id)
+    }
+
+    // ── DoseLog operations ───────────────────────────────────────────────────
+
+    fun getAllDoseLogs(): Flow<List<DoseLog>> = doseLogDao.getAll()
+
+    suspend fun getAllDoseLogsOnce(): List<DoseLog> = doseLogDao.getAllOnce()
+
+    suspend fun getDoseLogsForDate(date: String): List<DoseLog> = doseLogDao.getForDate(date)
+
+    suspend fun getDoseLogsForMedication(medId: String): List<DoseLog> =
+        doseLogDao.getForMedication(medId)
+
+    suspend fun getDoseLogsForDateRange(start: String, end: String): List<DoseLog> =
+        doseLogDao.getForDateRange(start, end)
+
+    suspend fun upsertDoseLog(log: DoseLog) = doseLogDao.upsert(log)
+
+    // ── StockEvent operations ────────────────────────────────────────────────
+
+    suspend fun getAllStockEvents(): List<StockEvent> = stockEventDao.getAll()
+
+    suspend fun insertStockEvent(event: StockEvent) = stockEventDao.insert(event)
+
+    // ── Business logic ───────────────────────────────────────────────────────
+
+    suspend fun takeDose(log: DoseLog, med: Medication) {
+        val now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+
+        val updatedLog = log.copy(
+            status = "taken",
+            takenAt = now
+        )
+        doseLogDao.upsert(updatedLog)
+
+        val newStock = (med.currentStock - med.tabletsPerDose).coerceAtLeast(0)
+        medicationDao.upsert(med.copy(currentStock = newStock))
+
+        stockEventDao.insert(
+            StockEvent(
+                id = UUID.randomUUID().toString(),
+                medicationId = med.id,
+                type = "consumed",
+                quantity = med.tabletsPerDose,
+                note = "Dose taken",
+                createdAt = now
+            )
+        )
+    }
+
+    suspend fun skipDose(log: DoseLog) {
+        doseLogDao.upsert(log.copy(status = "skipped"))
+    }
+
+    suspend fun undoDose(log: DoseLog, med: Medication) {
+        val wasTaken = log.status == "taken"
+
+        doseLogDao.upsert(log.copy(status = "pending", takenAt = null))
+
+        if (wasTaken) {
+            val restoredStock = med.currentStock + med.tabletsPerDose
+            medicationDao.upsert(med.copy(currentStock = restoredStock))
+
+            val now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+            stockEventDao.insert(
+                StockEvent(
+                    id = UUID.randomUUID().toString(),
+                    medicationId = med.id,
+                    type = "adjusted",
+                    quantity = med.tabletsPerDose,
+                    note = "Dose undone — stock restored",
+                    createdAt = now
+                )
+            )
+        }
+    }
+
+    suspend fun addStock(medId: String, quantity: Int, note: String = "") {
+        val med = medicationDao.getById(medId) ?: return
+        medicationDao.upsert(med.copy(currentStock = med.currentStock + quantity))
+
+        val now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        stockEventDao.insert(
+            StockEvent(
+                id = UUID.randomUUID().toString(),
+                medicationId = medId,
+                type = "added",
+                quantity = quantity,
+                note = note.ifBlank { "Stock added" },
+                createdAt = now
+            )
+        )
+    }
+
+    suspend fun useRepeat(medId: String) {
+        val med = medicationDao.getById(medId) ?: return
+        if (med.repeatsRemaining > 0) {
+            medicationDao.upsert(med.copy(repeatsRemaining = med.repeatsRemaining - 1))
+        }
+    }
+
+    /**
+     * Generate today's dose log entries for all active medications.
+     *
+     * Logic:
+     * - as_needed: single entry with scheduledTime = "PRN"
+     * - weekly: only generate if today matches the day-of-week the medication was created on
+     * - daily / twice_daily / three_times_daily: one entry per scheduledTime
+     * - Existing logs for today are preserved (no duplicates)
+     *
+     * Returns: sorted list — scheduled times first (ascending), PRN entries at the end.
+     */
+    suspend fun generateTodaysDoses(): List<DoseLog> {
+        val allToday = ensureDoseLogsForDate(LocalDate.now())
+        return allToday.sortedWith(compareBy<DoseLog> {
+            if (it.scheduledTime == "PRN") 1 else 0
+        }.thenBy { it.scheduledTime })
+    }
+
+    /**
+     * Ensure dose logs exist for a specific date, creating missing entries from active meds.
+     *
+     * This is used by both UI flows and background notification workers so overdue checks
+     * still work even if the app has not been opened that day.
+     */
+    suspend fun ensureDoseLogsForDate(date: LocalDate): List<DoseLog> {
+        val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+
+        val activeMeds = medicationDao.getAllOnce().filter { it.active }
+        val existingLogs = doseLogDao.getForDate(dateStr)
+        val existingKeys = existingLogs.map { it.medicationId to it.scheduledTime }.toSet()
+
+        val newLogs = mutableListOf<DoseLog>()
+
+        for (med in activeMeds) {
+            when (med.frequency) {
+                "as_needed" -> {
+                    val key = med.id to "PRN"
+                    if (key !in existingKeys) {
+                        newLogs.add(
+                            DoseLog(
+                                id = UUID.randomUUID().toString(),
+                                medicationId = med.id,
+                                scheduledDate = dateStr,
+                                scheduledTime = "PRN",
+                                status = "pending",
+                                takenAt = null,
+                                createdAt = now
+                            )
+                        )
+                    }
+                }
+
+                "weekly" -> {
+                    if (shouldScheduleWeeklyDoseOnDate(med, date)) {
+                        for (time in med.scheduledTimes) {
+                            if (time == "PRN") continue
+                            val key = med.id to time
+                            if (key !in existingKeys) {
+                                newLogs.add(
+                                    DoseLog(
+                                        id = UUID.randomUUID().toString(),
+                                        medicationId = med.id,
+                                        scheduledDate = dateStr,
+                                        scheduledTime = time,
+                                        status = "pending",
+                                        takenAt = null,
+                                        createdAt = now
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+
+                else -> {
+                    // daily, twice_daily, three_times_daily
+                    for (time in med.scheduledTimes) {
+                        if (time == "PRN") continue
+                        val key = med.id to time
+                        if (key !in existingKeys) {
+                            newLogs.add(
+                                DoseLog(
+                                    id = UUID.randomUUID().toString(),
+                                    medicationId = med.id,
+                                    scheduledDate = dateStr,
+                                    scheduledTime = time,
+                                    status = "pending",
+                                    takenAt = null,
+                                    createdAt = now
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        for (log in newLogs) {
+            doseLogDao.upsert(log)
+        }
+
+        return doseLogDao.getForDate(dateStr)
+    }
+
+    private fun shouldScheduleWeeklyDoseOnDate(med: Medication, date: LocalDate): Boolean {
+        val createdDate = try {
+            LocalDate.parse(med.createdAt.take(10))
+        } catch (_: Exception) {
+            try {
+                LocalDateTime.parse(med.createdAt, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                    .toLocalDate()
+            } catch (_: Exception) {
+                null
+            }
+        }
+        return createdDate != null && date.dayOfWeek == createdDate.dayOfWeek
+    }
+
+    /**
+     * Calculate adherence statistics for a date range.
+     */
+    suspend fun getAdherenceStats(startDate: String, endDate: String): AdherenceStats {
+        val logs = doseLogDao.getForDateRange(startDate, endDate)
+            .filter { it.scheduledTime != "PRN" }
+
+        val total = logs.size
+        val taken = logs.count { it.status == "taken" }
+        val skipped = logs.count { it.status == "skipped" }
+        val missed = logs.count { it.status == "missed" }
+        val pending = logs.count { it.status == "pending" }
+
+        val rate = if (total > 0) {
+            (taken.toDouble() / total) * 100.0
+        } else {
+            0.0
+        }
+
+        return AdherenceStats(
+            totalDoses = total,
+            takenDoses = taken,
+            skippedDoses = skipped,
+            missedDoses = missed,
+            pendingDoses = pending,
+            adherenceRate = rate
+        )
+    }
+
+    /**
+     * Get adherence rate for each of the last 7 days.
+     */
+    suspend fun getLast7DaysAdherence(): List<DayAdherence> {
+        val today = LocalDate.now()
+        val days = mutableListOf<DayAdherence>()
+
+        for (i in 6 downTo 0) {
+            val date = today.minusDays(i.toLong())
+            val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+
+            val logs = doseLogDao.getForDate(dateStr)
+                .filter { it.scheduledTime != "PRN" }
+
+            val total = logs.size
+            val taken = logs.count { it.status == "taken" }
+            val rate = if (total > 0) (taken.toDouble() / total) * 100.0 else 0.0
+
+            days.add(DayAdherence(date = dateStr, rate = rate))
+        }
+
+        return days
+    }
+
+    /**
+     * Clear all data from the database.
+     */
+    suspend fun clearAllData() {
+        stockEventDao.deleteAll()
+        doseLogDao.deleteAll()
+        medicationDao.deleteAll()
+    }
+
+    /**
+     * Export all data as a JSON string.
+     */
+    suspend fun exportData(): String {
+        val meds = medicationDao.getAllOnce()
+        val logs = doseLogDao.getAllOnce()
+        val events = stockEventDao.getAll()
+
+        val root = org.json.JSONObject()
+
+        // Medications
+        val medsArray = org.json.JSONArray()
+        for (med in meds) {
+            val obj = org.json.JSONObject()
+            obj.put("id", med.id)
+            obj.put("name", med.name)
+            obj.put("dosage", med.dosage)
+            obj.put("unit", med.unit)
+            obj.put("frequency", med.frequency)
+            obj.put("timesPerDay", med.timesPerDay)
+            val timesArr = org.json.JSONArray()
+            med.scheduledTimes.forEach { timesArr.put(it) }
+            obj.put("scheduledTimes", timesArr)
+            obj.put("tabletsPerDose", med.tabletsPerDose)
+            obj.put("currentStock", med.currentStock)
+            obj.put("repeatsRemaining", med.repeatsRemaining)
+            obj.put("lowStockThreshold", med.lowStockThreshold)
+            obj.put("notes", med.notes)
+            obj.put("active", med.active)
+            obj.put("createdAt", med.createdAt)
+            obj.put("color", med.color)
+            medsArray.put(obj)
+        }
+        root.put("medications", medsArray)
+
+        // Dose Logs
+        val logsArray = org.json.JSONArray()
+        for (log in logs) {
+            val obj = org.json.JSONObject()
+            obj.put("id", log.id)
+            obj.put("medicationId", log.medicationId)
+            obj.put("scheduledDate", log.scheduledDate)
+            obj.put("scheduledTime", log.scheduledTime)
+            obj.put("status", log.status)
+            obj.put("takenAt", log.takenAt ?: org.json.JSONObject.NULL)
+            obj.put("createdAt", log.createdAt)
+            logsArray.put(obj)
+        }
+        root.put("doseLogs", logsArray)
+
+        // Stock Events
+        val eventsArray = org.json.JSONArray()
+        for (event in events) {
+            val obj = org.json.JSONObject()
+            obj.put("id", event.id)
+            obj.put("medicationId", event.medicationId)
+            obj.put("type", event.type)
+            obj.put("quantity", event.quantity)
+            obj.put("note", event.note)
+            obj.put("createdAt", event.createdAt)
+            eventsArray.put(obj)
+        }
+        root.put("stockEvents", eventsArray)
+
+        root.put("exportedAt", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
+
+        return root.toString(2)
+    }
+
+    /**
+     * Import data from a JSON string. Replaces all existing data.
+     */
+    suspend fun importData(jsonString: String) {
+        val root = org.json.JSONObject(jsonString)
+
+        // Clear existing data
+        stockEventDao.deleteAll()
+        doseLogDao.deleteAll()
+        medicationDao.deleteAll()
+
+        // Import medications
+        if (root.has("medications")) {
+            val arr = root.getJSONArray("medications")
+            val meds = mutableListOf<Medication>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val timesArr = obj.optJSONArray("scheduledTimes")
+                val times = if (timesArr != null) {
+                    (0 until timesArr.length()).map { timesArr.getString(it) }
+                } else {
+                    emptyList()
+                }
+                meds.add(
+                    Medication(
+                        id = obj.getString("id"),
+                        name = obj.optString("name", ""),
+                        dosage = obj.optString("dosage", ""),
+                        unit = obj.optString("unit", "tablet"),
+                        frequency = obj.optString("frequency", "daily"),
+                        timesPerDay = obj.optInt("timesPerDay", 1),
+                        scheduledTimes = times,
+                        tabletsPerDose = obj.optInt("tabletsPerDose", 1),
+                        currentStock = obj.optInt("currentStock", 0),
+                        repeatsRemaining = obj.optInt("repeatsRemaining", 0),
+                        lowStockThreshold = obj.optInt("lowStockThreshold", 10),
+                        notes = obj.optString("notes", ""),
+                        active = obj.optBoolean("active", true),
+                        createdAt = obj.optString("createdAt", ""),
+                        color = obj.optString("color", MED_COLORS.first())
+                    )
+                )
+            }
+            medicationDao.upsertAll(meds)
+        }
+
+        // Import dose logs
+        if (root.has("doseLogs")) {
+            val arr = root.getJSONArray("doseLogs")
+            val logs = mutableListOf<DoseLog>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                logs.add(
+                    DoseLog(
+                        id = obj.getString("id"),
+                        medicationId = obj.getString("medicationId"),
+                        scheduledDate = obj.getString("scheduledDate"),
+                        scheduledTime = obj.getString("scheduledTime"),
+                        status = obj.optString("status", "pending"),
+                        takenAt = if (obj.isNull("takenAt")) null else obj.optString("takenAt"),
+                        createdAt = obj.optString("createdAt", "")
+                    )
+                )
+            }
+            doseLogDao.upsertAll(logs)
+        }
+
+        // Import stock events
+        if (root.has("stockEvents")) {
+            val arr = root.getJSONArray("stockEvents")
+            val events = mutableListOf<StockEvent>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                events.add(
+                    StockEvent(
+                        id = obj.getString("id"),
+                        medicationId = obj.getString("medicationId"),
+                        type = obj.getString("type"),
+                        quantity = obj.optInt("quantity", 0),
+                        note = obj.optString("note", ""),
+                        createdAt = obj.optString("createdAt", "")
+                    )
+                )
+            }
+            stockEventDao.insertAll(events)
+        }
+    }
+}
