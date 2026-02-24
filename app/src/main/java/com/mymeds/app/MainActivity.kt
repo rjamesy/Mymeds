@@ -1,25 +1,37 @@
 package com.mymeds.app
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mymeds.app.data.model.Medication
+import com.mymeds.app.notification.DoseAlarmScheduler
 import com.mymeds.app.ui.components.AddStockDialog
 import com.mymeds.app.ui.components.MedicationFormDialog
 import com.mymeds.app.ui.navigation.AppNavigation
 import com.mymeds.app.ui.theme.MyMedsTheme
+import com.mymeds.app.ui.theme.ThemeState
 import com.mymeds.app.ui.viewmodel.MedsViewModel
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Load saved theme preference before setContent
+        ThemeState.loadFromPrefs(this)
         enableEdgeToEdge()
         setContent {
             MyMedsTheme {
@@ -28,9 +40,41 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val viewModel: MedsViewModel = viewModel()
+                    RequestNotificationPermission()
                     MainContent(viewModel)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun RequestNotificationPermission() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            android.util.Log.d("MyMeds", "POST_NOTIFICATIONS permission granted")
+            scope.launch { DoseAlarmScheduler.scheduleDoseAlarms(context) }
+        } else {
+            android.util.Log.d("MyMeds", "POST_NOTIFICATIONS permission denied")
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val already = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!already) {
+            launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            android.util.Log.d("MyMeds", "POST_NOTIFICATIONS permission already granted")
         }
     }
 }

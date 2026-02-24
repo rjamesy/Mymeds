@@ -6,6 +6,7 @@
 
     <!-- Exact alarm scheduling -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <!-- Keep alarms alive after reboot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -24,6 +25,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.MyMeds">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -34,6 +36,11 @@
         <!-- Dose reminder alarm receiver -->
         <receiver
             android:name=".notification.DoseReminderReceiver"
+            android:exported="false" />
+
+        <!-- Snooze receiver for "Remind in 15 min" action -->
+        <receiver
+            android:name=".notification.SnoozeReceiver"
             android:exported="false" />
 
         <!-- Boot receiver to reschedule alarms after device restart -->

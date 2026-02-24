@@ -56,7 +56,16 @@ fun getDaysSupply(med: Medication): Int {
             kotlin.math.ceil(med.currentStock.toDouble() / med.tabletsPerDose).toInt()
         } else 0
     }
-    val dailyConsumption = med.timesPerDay * med.tabletsPerDose
+    // For every-other-day, daily consumption is halved
+    val dailyConsumption = if (med.frequency == "every_other_day") {
+        // Consumes on alternating days, so average daily is half
+        val perDoseDay = med.timesPerDay * med.tabletsPerDose
+        if (perDoseDay == 0) return Int.MAX_VALUE
+        // Return supply in actual calendar days (double the doses)
+        return (med.currentStock * 2) / perDoseDay
+    } else {
+        med.timesPerDay * med.tabletsPerDose
+    }
     if (dailyConsumption == 0) return Int.MAX_VALUE
     return med.currentStock / dailyConsumption
 }

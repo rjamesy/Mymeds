@@ -37,6 +37,10 @@ import com.mymeds.app.notification.DoseAlarmScheduler
 import com.mymeds.app.notification.OverdueDoseWorker
 import java.util.concurrent.TimeUnit
 import com.mymeds.app.ui.theme.Danger
+import com.mymeds.app.ui.theme.THEME_MODE_DARK
+import com.mymeds.app.ui.theme.THEME_MODE_LIGHT
+import com.mymeds.app.ui.theme.THEME_MODE_SYSTEM
+import com.mymeds.app.ui.theme.ThemeState
 import com.mymeds.app.ui.theme.Warning
 import com.mymeds.app.ui.viewmodel.MedsViewModel
 import com.mymeds.app.util.formatTime
@@ -253,6 +257,47 @@ fun SettingsScreen(
             }
         }
 
+        // ── Dark Mode Toggle ──────────────────────────────────────────────────
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Appearance",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    val currentMode = ThemeState.themeMode
+                    val options = listOf(
+                        THEME_MODE_SYSTEM to "System",
+                        THEME_MODE_LIGHT to "Light",
+                        THEME_MODE_DARK to "Dark"
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        options.forEach { (mode, label) ->
+                            val isSelected = currentMode == mode
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { ThemeState.setMode(context, mode) },
+                                label = { Text(label) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // ── Active Medications Section ───────────────────────────────────────
         item {
             Text(
@@ -387,7 +432,7 @@ fun SettingsScreen(
         item {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "MyMeds v1.4 \u00B7 Data stored locally on your device",
+                text = "MyMeds v1.8 \u00B7 Data stored locally on your device",
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodySmall,
@@ -566,6 +611,14 @@ private fun MedCard(
                 )
                 Spacer(modifier = Modifier.height(10.dp))
             }
+
+            Text(
+                text = "Time between doses: ${med.doseIntervalHours} hour${if (med.doseIntervalHours == 1) "" else "s"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
 
             // ── Stock info bar ───────────────────────────────────────────────
             val stockBgColor = when (stockStatus) {

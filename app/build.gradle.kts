@@ -13,8 +13,8 @@ android {
         applicationId = "com.mymeds.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.4"
+        versionCode = 11
+        versionName = "1.8"
     }
 
     buildTypes {

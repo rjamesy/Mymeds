@@ -58,6 +58,9 @@ fun MedicationFormDialog(
                 ?: (DEFAULT_TIMES[frequency] ?: listOf("08:00"))
         )
     }
+    var doseIntervalHours by remember {
+        mutableStateOf((medication?.doseIntervalHours?.coerceIn(1, 6) ?: 6).toString())
+    }
     var tabletsPerDose by remember {
         mutableStateOf((medication?.tabletsPerDose ?: 1).toString())
     }
@@ -73,9 +76,24 @@ fun MedicationFormDialog(
     var color by remember { mutableStateOf(medication?.color ?: MED_COLORS.first()) }
     var notes by remember { mutableStateOf(medication?.notes ?: "") }
 
+    // For "every_x_hours" frequency: interval in hours
+    var hourInterval by remember {
+        mutableStateOf(
+            if (medication?.frequency == "every_x_hours" && medication.scheduledTimes.size > 1) {
+                // Infer interval from existing times
+                val times = medication.scheduledTimes.mapNotNull {
+                    val p = it.split(":")
+                    if (p.size == 2) p[0].toIntOrNull() else null
+                }.sorted()
+                if (times.size >= 2) (times[1] - times[0]).toString() else "4"
+            } else "4"
+        )
+    }
+
     // ── Dropdown expanded states ────────────────────────────────────────────
     var unitExpanded by remember { mutableStateOf(false) }
     var frequencyExpanded by remember { mutableStateOf(false) }
+    var doseIntervalExpanded by remember { mutableStateOf(false) }
 
     // ── Time picker state ───────────────────────────────────────────────────
     var showTimePicker by remember { mutableStateOf(false) }
@@ -93,7 +111,20 @@ fun MedicationFormDialog(
     // When frequency changes (and not editing), reset scheduled times to defaults
     LaunchedEffect(frequency) {
         if (!isEditing) {
-            scheduledTimes = DEFAULT_TIMES[frequency] ?: listOf("08:00")
+            if (frequency == "every_x_hours") {
+                // Auto-generate from interval
+                val interval = hourInterval.toIntOrNull() ?: 4
+                val times = mutableListOf<String>()
+                var hour = 8
+                while (hour < 24) {
+                    times.add("${hour.toString().padStart(2, '0')}:00")
+                    hour += interval
+                }
+                if (times.isEmpty()) times.add("08:00")
+                scheduledTimes = times
+            } else {
+                scheduledTimes = DEFAULT_TIMES[frequency] ?: listOf("08:00")
+            }
         }
     }
 
@@ -227,7 +258,81 @@ fun MedicationFormDialog(
                         }
                     }
 
-                    // 5. Scheduled Times (hidden when frequency is "as_needed")
+                    // 5a. Hour interval input (only for "every_x_hours")
+                    ExposedDropdownMenuBox(
+                        expanded = doseIntervalExpanded,
+                        onExpandedChange = { doseIntervalExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = "$doseIntervalHours hour${if (doseIntervalHours == "1") "" else "s"}",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Time between doses") },
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = doseIntervalExpanded)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = doseIntervalExpanded,
+                            onDismissRequest = { doseIntervalExpanded = false }
+                        ) {
+                            (1..6).forEach { hours ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text("$hours hour${if (hours == 1) "" else "s"}")
+                                    },
+                                    onClick = {
+                                        doseIntervalHours = hours.toString()
+                                        doseIntervalExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // 5b. Hour interval input (only for "every_x_hours")
+                    if (frequency == "every_x_hours") {
+                        OutlinedTextField(
+                            value = hourInterval,
+                            onValueChange = { newVal ->
+                                hourInterval = newVal.filter { c -> c.isDigit() }
+                                // Auto-generate scheduled times based on interval
+                                val interval = hourInterval.toIntOrNull() ?: 4
+                                if (interval in 1..24) {
+                                    val times = mutableListOf<String>()
+                                    var hour = 8 // Start at 8 AM
+                                    while (hour < 24) {
+                                        times.add("${hour.toString().padStart(2, '0')}:00")
+                                        hour += interval
+                                    }
+                                    if (times.isEmpty()) times.add("08:00")
+                                    scheduledTimes = times
+                                }
+                            },
+                            label = { Text("Every how many hours?") },
+                            placeholder = { Text("e.g. 4") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            supportingText = {
+                                val interval = hourInterval.toIntOrNull() ?: 4
+                                val count = if (interval in 1..24) {
+                                    var h = 8
+                                    var c = 0
+                                    while (h < 24) { c++; h += interval }
+                                    c
+                                } else 0
+                                Text("$count dose${if (count != 1) "s" else ""} per day starting at 8:00 AM")
+                            }
+                        )
+                    }
+
+                    // 5c. Scheduled Times (hidden when frequency is "as_needed")
                     if (frequency != "as_needed") {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(
@@ -350,32 +455,30 @@ fun MedicationFormDialog(
                             color = MaterialTheme.colorScheme.onSurface
                         )
 
-                        // Two rows of 6 colors
-                        for (rowStart in MED_COLORS.indices step 6) {
+                        // Two rows of 8 colors
+                        for (rowStart in MED_COLORS.indices step 8) {
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                for (i in rowStart until minOf(rowStart + 6, MED_COLORS.size)) {
+                                for (i in rowStart until minOf(rowStart + 8, MED_COLORS.size)) {
                                     val colorHex = MED_COLORS[i]
                                     val isSelected = color == colorHex
                                     val parsedColor = parseHexColor(colorHex)
+                                    val isWhite = colorHex == "#ffffff" || colorHex == "#FFFFFF"
 
                                     Box(
                                         modifier = Modifier
-                                            .size(40.dp)
+                                            .size(36.dp)
                                             .clip(CircleShape)
                                             .background(parsedColor, CircleShape)
-                                            .then(
-                                                if (isSelected) {
-                                                    Modifier.border(
-                                                        3.dp,
-                                                        MaterialTheme.colorScheme.onBackground,
-                                                        CircleShape
-                                                    )
-                                                } else {
-                                                    Modifier
-                                                }
+                                            .border(
+                                                width = if (isSelected) 2.dp else 1.dp,
+                                                color = if (isSelected)
+                                                    MaterialTheme.colorScheme.onBackground
+                                                else
+                                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                                shape = CircleShape
                                             )
                                             .clickable { color = colorHex },
                                         contentAlignment = Alignment.Center
@@ -384,8 +487,8 @@ fun MedicationFormDialog(
                                             Icon(
                                                 Icons.Default.Check,
                                                 contentDescription = "Selected",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(20.dp)
+                                                tint = if (isWhite) Color.Black else Color.White,
+                                                modifier = Modifier.size(18.dp)
                                             )
                                         }
                                     }
@@ -444,10 +547,11 @@ fun MedicationFormDialog(
                                     Locale.US
                                 ).format(Date())
 
-                                val timesPerDay = if (frequency == "as_needed") {
-                                    0
-                                } else {
-                                    FREQUENCY_TIMES[frequency] ?: scheduledTimes.size
+                                val timesPerDay = when (frequency) {
+                                    "as_needed" -> 0
+                                    "every_x_hours" -> scheduledTimes.size
+                                    "every_other_day" -> scheduledTimes.size
+                                    else -> FREQUENCY_TIMES[frequency] ?: scheduledTimes.size
                                 }
 
                                 val finalTimes = if (frequency == "as_needed") {
@@ -464,6 +568,8 @@ fun MedicationFormDialog(
                                     frequency = frequency,
                                     timesPerDay = timesPerDay,
                                     scheduledTimes = finalTimes,
+                                    doseIntervalHours = doseIntervalHours.toIntOrNull()
+                                        ?.coerceIn(1, 6) ?: 6,
                                     tabletsPerDose = tabletsPerDose.toIntOrNull() ?: 1,
                                     currentStock = currentStock.toIntOrNull() ?: 0,
                                     repeatsRemaining = repeatsRemaining.toIntOrNull() ?: 0,

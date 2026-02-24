@@ -53,16 +53,17 @@ fun HistoryScreen(viewModel: MedsViewModel) {
     // Day detail
     var dayLogs by remember { mutableStateOf<List<DoseLog>>(emptyList()) }
     var dayStats by remember { mutableStateOf<AdherenceStats?>(null) }
+    var refreshKey by remember { mutableIntStateOf(0) }
 
     // Load 30-day stats
-    LaunchedEffect(Unit) {
+    LaunchedEffect(refreshKey) {
         val startDate = getDateNDaysAgo(30)
         val endDate = getTodayStr()
         stats = viewModel.getAdherenceStats(startDate, endDate)
     }
 
-    // Load day detail when selected date changes
-    LaunchedEffect(selectedDate) {
+    // Load day detail when selected date changes or after dose update
+    LaunchedEffect(selectedDate, refreshKey) {
         dayLogs = viewModel.getDoseLogsForDate(selectedDate)
         dayStats = viewModel.getAdherenceStats(selectedDate, selectedDate)
     }
@@ -156,7 +157,9 @@ fun HistoryScreen(viewModel: MedsViewModel) {
             selectedDate = selectedDate,
             dayLogs = dayLogs,
             dayStats = dayStats,
-            medMap = medMap
+            medMap = medMap,
+            viewModel = viewModel,
+            onDoseUpdated = { refreshKey++ }
         )
     }
 }
@@ -477,8 +480,12 @@ private fun DayDetailPanel(
     selectedDate: String,
     dayLogs: List<DoseLog>,
     dayStats: AdherenceStats?,
-    medMap: Map<String, Medication>
+    medMap: Map<String, Medication>,
+    viewModel: MedsViewModel,
+    onDoseUpdated: () -> Unit
 ) {
+    var selectedLog by remember { mutableStateOf<DoseLog?>(null) }
+
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
@@ -537,7 +544,11 @@ private fun DayDetailPanel(
                 )
             } else {
                 scheduledLogs.forEach { log ->
-                    DoseLogRow(log = log, medication = medMap[log.medicationId])
+                    DoseLogRow(
+                        log = log,
+                        medication = medMap[log.medicationId],
+                        onClick = { selectedLog = log }
+                    )
                     if (log != scheduledLogs.last()) {
                         HorizontalDivider(
                             modifier = Modifier.padding(vertical = 6.dp),
@@ -548,12 +559,57 @@ private fun DayDetailPanel(
             }
         }
     }
+
+    // Confirmation dialog
+    selectedLog?.let { log ->
+        val med = medMap[log.medicationId]
+        val medName = med?.name ?: "Unknown"
+
+        if (log.status == "taken") {
+            AlertDialog(
+                onDismissRequest = { selectedLog = null },
+                title = { Text(medName) },
+                text = { Text("This dose is marked as taken. Change to missed?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.updateDoseStatus(log, "missed")
+                        selectedLog = null
+                        onDoseUpdated()
+                    }) { Text("Mark Missed") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { selectedLog = null }) { Text("Cancel") }
+                }
+            )
+        } else {
+            AlertDialog(
+                onDismissRequest = { selectedLog = null },
+                title = { Text(medName) },
+                text = { Text("Did you take this medication?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.updateDoseStatus(log, "taken")
+                        selectedLog = null
+                        onDoseUpdated()
+                    }) { Text("Yes") }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        viewModel.updateDoseStatus(log, "missed")
+                        selectedLog = null
+                        onDoseUpdated()
+                    }) { Text("No") }
+                }
+            )
+        }
+    }
 }
 
 @Composable
 private fun DoseLogRow(
     log: DoseLog,
-    medication: Medication?
+    medication: Medication?,
+    onClick: () -> Unit = {}
 ) {
     val statusColor = when (log.status) {
         "taken" -> Success
@@ -578,6 +634,8 @@ private fun DoseLogRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

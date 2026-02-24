@@ -58,6 +58,9 @@ interface DoseLogDao {
     @Upsert
     suspend fun upsertAll(logs: List<DoseLog>)
 
+    @Query("DELETE FROM dose_logs WHERE id = :id")
+    suspend fun deleteById(id: String)
+
     @Query("DELETE FROM dose_logs WHERE medicationId = :medId")
     suspend fun deleteForMedication(medId: String)
 

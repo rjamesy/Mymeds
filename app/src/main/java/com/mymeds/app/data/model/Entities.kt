@@ -35,6 +35,7 @@ data class Medication(
     val frequency: String = "daily",
     val timesPerDay: Int = 1,
     val scheduledTimes: List<String> = listOf("08:00"),
+    val doseIntervalHours: Int = 6,
     val tabletsPerDose: Int = 1,
     val currentStock: Int = 0,
     val repeatsRemaining: Int = 0,
@@ -82,13 +83,19 @@ val MED_COLORS: List<String> = listOf(
     "#2563eb",
     "#4338ca",
     "#9333ea",
-    "#c026d3"
+    "#c026d3",
+    "#64748b",
+    "#059669",
+    "#0284c7",
+    "#ffffff"
 )
 
 val FREQUENCY_LABELS: Map<String, String> = mapOf(
     "daily" to "Once daily",
     "twice_daily" to "Twice daily",
     "three_times_daily" to "Three times daily",
+    "every_other_day" to "Every other day",
+    "every_x_hours" to "Every X hours",
     "weekly" to "Once weekly",
     "as_needed" to "As needed"
 )
@@ -97,6 +104,8 @@ val DEFAULT_TIMES: Map<String, List<String>> = mapOf(
     "daily" to listOf("08:00"),
     "twice_daily" to listOf("08:00", "20:00"),
     "three_times_daily" to listOf("08:00", "14:00", "20:00"),
+    "every_other_day" to listOf("08:00"),
+    "every_x_hours" to listOf("08:00"),
     "weekly" to listOf("08:00"),
     "as_needed" to emptyList()
 )
@@ -105,6 +114,8 @@ val FREQUENCY_TIMES: Map<String, Int> = mapOf(
     "daily" to 1,
     "twice_daily" to 2,
     "three_times_daily" to 3,
+    "every_other_day" to 1,
+    "every_x_hours" to 1,
     "weekly" to 1,
     "as_needed" to 0
 )
