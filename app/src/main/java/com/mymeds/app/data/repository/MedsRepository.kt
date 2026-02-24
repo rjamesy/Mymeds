@@ -8,13 +8,11 @@ import com.mymeds.app.data.model.MED_COLORS
 import com.mymeds.app.data.model.Medication
 import com.mymeds.app.data.model.StockEvent
 import kotlinx.coroutines.flow.Flow
-import java.text.SimpleDateFormat
-import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
-import java.util.Locale
 import java.util.UUID
 
 class MedsRepository(private val db: AppDatabase) {
@@ -22,6 +20,7 @@ class MedsRepository(private val db: AppDatabase) {
     private val medicationDao = db.medicationDao()
     private val doseLogDao = db.doseLogDao()
     private val stockEventDao = db.stockEventDao()
+    private val timeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
     // ── Medication operations ────────────────────────────────────────────────
 
@@ -63,13 +62,20 @@ class MedsRepository(private val db: AppDatabase) {
     // ── Business logic ───────────────────────────────────────────────────────
 
     suspend fun takeDose(log: DoseLog, med: Medication) {
-        val now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        val takenAt = LocalDateTime.now()
+        val now = takenAt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
 
         val updatedLog = log.copy(
             status = "taken",
             takenAt = now
         )
         doseLogDao.upsert(updatedLog)
+
+        shiftRemainingDosesForToday(
+            takenLog = log,
+            med = med,
+            takenAt = takenAt
+        )
 
         val newStock = (med.currentStock - med.tabletsPerDose).coerceAtLeast(0)
         medicationDao.upsert(med.copy(currentStock = newStock))
@@ -84,6 +90,65 @@ class MedsRepository(private val db: AppDatabase) {
                 createdAt = now
             )
         )
+    }
+
+    /**
+     * For today's doses only, push later pending doses forward so they remain at least
+     * `doseIntervalHours` after the actual taken time.
+     *
+     * This preserves safety for overdue doses taken late (e.g., 1pm dose makes next dose 7pm
+     * when interval is 6h) and keeps reminders/UI aligned with the adjusted schedule.
+     */
+    private suspend fun shiftRemainingDosesForToday(
+        takenLog: DoseLog,
+        med: Medication,
+        takenAt: LocalDateTime
+    ) {
+        if (takenLog.scheduledTime == "PRN") return
+
+        val today = LocalDate.now()
+        val scheduledDate = runCatching { LocalDate.parse(takenLog.scheduledDate) }.getOrNull()
+            ?: return
+        if (scheduledDate != today) return
+
+        val takenScheduledTime = parseTimeOrNull(takenLog.scheduledTime) ?: return
+        val intervalHours = med.doseIntervalHours.coerceIn(1, 6).toLong()
+
+        val pendingLaterLogs = doseLogDao.getForDate(takenLog.scheduledDate)
+            .asSequence()
+            .filter { it.medicationId == med.id }
+            .filter { it.status == "pending" && it.scheduledTime != "PRN" }
+            .mapNotNull { log ->
+                val t = parseTimeOrNull(log.scheduledTime) ?: return@mapNotNull null
+                log to t
+            }
+            .filter { (_, time) -> time.isAfter(takenScheduledTime) }
+            .sortedBy { (_, time) -> time }
+            .toList()
+
+        if (pendingLaterLogs.isEmpty()) return
+
+        var previousDoseDateTime = takenAt
+        val endOfDay = LocalDateTime.of(scheduledDate, LocalTime.of(23, 59))
+
+        for ((pendingLog, pendingTime) in pendingLaterLogs) {
+            val scheduledDateTime = LocalDateTime.of(scheduledDate, pendingTime)
+            val earliestAllowed = previousDoseDateTime.plusHours(intervalHours)
+
+            val adjustedDateTime = when {
+                scheduledDateTime.isBefore(earliestAllowed) && earliestAllowed.isAfter(endOfDay) ->
+                    endOfDay
+                scheduledDateTime.isBefore(earliestAllowed) ->
+                    earliestAllowed
+                else -> scheduledDateTime
+            }
+
+            val adjustedTime = adjustedDateTime.format(timeFormatter)
+            if (adjustedTime != pendingLog.scheduledTime) {
+                doseLogDao.upsert(pendingLog.copy(scheduledTime = adjustedTime))
+            }
+            previousDoseDateTime = adjustedDateTime
+        }
     }
 
     suspend fun skipDose(log: DoseLog) {
@@ -111,6 +176,29 @@ class MedsRepository(private val db: AppDatabase) {
                 )
             )
         }
+    }
+
+    suspend fun markMissed(log: DoseLog, med: Medication) {
+        val now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+
+        if (log.status == "taken") {
+            // Restore stock since dose was previously recorded as taken
+            val restoredStock = med.currentStock + med.tabletsPerDose
+            medicationDao.upsert(med.copy(currentStock = restoredStock))
+
+            stockEventDao.insert(
+                StockEvent(
+                    id = UUID.randomUUID().toString(),
+                    medicationId = med.id,
+                    type = "adjusted",
+                    quantity = med.tabletsPerDose,
+                    note = "Dose changed to missed — stock restored",
+                    createdAt = now
+                )
+            )
+        }
+
+        doseLogDao.upsert(log.copy(status = "missed", takenAt = null))
     }
 
     suspend fun addStock(medId: String, quantity: Int, note: String = "") {
@@ -164,73 +252,98 @@ class MedsRepository(private val db: AppDatabase) {
     suspend fun ensureDoseLogsForDate(date: LocalDate): List<DoseLog> {
         val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
         val now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        val today = LocalDate.now()
 
         val activeMeds = medicationDao.getAllOnce().filter { it.active }
         val existingLogs = doseLogDao.getForDate(dateStr)
-        val existingKeys = existingLogs.map { it.medicationId to it.scheduledTime }.toSet()
+        val expectedTimesByMedication = mutableMapOf<String, Set<String>>()
+
+        // ── Step 1: Reconcile stale logs when medication times have changed ──
+        for (med in activeMeds) {
+            val logsForMed = existingLogs.filter { it.medicationId == med.id }
+            val baseExpectedTimes = expectedTimesForDate(med, date)
+            val preserveAdjustedTodayTimes = date == today &&
+                med.frequency != "as_needed" &&
+                logsForMed.any { it.status == "taken" && it.takenAt != null }
+
+            val expectedTimes = if (preserveAdjustedTodayTimes) {
+                val existingTimes = logsForMed
+                    .map { it.scheduledTime }
+                    .filter { it != "PRN" }
+                    .toSet()
+                if (existingTimes.isNotEmpty()) existingTimes else baseExpectedTimes
+            } else {
+                baseExpectedTimes
+            }
+
+            expectedTimesByMedication[med.id] = expectedTimes
+
+            val staleLogs = logsForMed.filter { it.scheduledTime !in expectedTimes }
+            val matchedTimes = logsForMed.filter { it.scheduledTime in expectedTimes }
+                .map { it.scheduledTime }.toMutableSet()
+
+            // Times that need a new log (not yet covered by an existing log)
+            val uncoveredTimes = expectedTimes.toMutableSet().apply { removeAll(matchedTimes) }
+
+            for (staleLog in staleLogs) {
+                if (staleLog.status == "taken" || staleLog.status == "skipped") {
+                    // Reassign to an uncovered time slot, preserving status
+                    val newTime = uncoveredTimes.firstOrNull()
+                    if (newTime != null) {
+                        uncoveredTimes.remove(newTime)
+                        doseLogDao.upsert(staleLog.copy(scheduledTime = newTime))
+                    } else {
+                        // No uncovered time left — user reduced doses, delete the extra
+                        doseLogDao.deleteById(staleLog.id)
+                    }
+                } else {
+                    // Pending/missed stale log — just delete it
+                    doseLogDao.deleteById(staleLog.id)
+                }
+            }
+        }
+
+        // ── Step 2: Re-read logs after reconciliation and create any still-missing entries ──
+        val reconciledLogs = doseLogDao.getForDate(dateStr)
+        val reconciledKeys = reconciledLogs.map { it.medicationId to it.scheduledTime }.toSet()
 
         val newLogs = mutableListOf<DoseLog>()
 
         for (med in activeMeds) {
-            when (med.frequency) {
-                "as_needed" -> {
-                    val key = med.id to "PRN"
-                    if (key !in existingKeys) {
-                        newLogs.add(
-                            DoseLog(
-                                id = UUID.randomUUID().toString(),
-                                medicationId = med.id,
-                                scheduledDate = dateStr,
-                                scheduledTime = "PRN",
-                                status = "pending",
-                                takenAt = null,
-                                createdAt = now
-                            )
+            val expectedTimes = expectedTimesByMedication[med.id].orEmpty()
+            if (med.frequency == "as_needed") {
+                val key = med.id to "PRN"
+                if (key !in reconciledKeys) {
+                    newLogs.add(
+                        DoseLog(
+                            id = UUID.randomUUID().toString(),
+                            medicationId = med.id,
+                            scheduledDate = dateStr,
+                            scheduledTime = "PRN",
+                            status = "pending",
+                            takenAt = null,
+                            createdAt = now
                         )
-                    }
+                    )
                 }
+                continue
+            }
 
-                "weekly" -> {
-                    if (shouldScheduleWeeklyDoseOnDate(med, date)) {
-                        for (time in med.scheduledTimes) {
-                            if (time == "PRN") continue
-                            val key = med.id to time
-                            if (key !in existingKeys) {
-                                newLogs.add(
-                                    DoseLog(
-                                        id = UUID.randomUUID().toString(),
-                                        medicationId = med.id,
-                                        scheduledDate = dateStr,
-                                        scheduledTime = time,
-                                        status = "pending",
-                                        takenAt = null,
-                                        createdAt = now
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-
-                else -> {
-                    // daily, twice_daily, three_times_daily
-                    for (time in med.scheduledTimes) {
-                        if (time == "PRN") continue
-                        val key = med.id to time
-                        if (key !in existingKeys) {
-                            newLogs.add(
-                                DoseLog(
-                                    id = UUID.randomUUID().toString(),
-                                    medicationId = med.id,
-                                    scheduledDate = dateStr,
-                                    scheduledTime = time,
-                                    status = "pending",
-                                    takenAt = null,
-                                    createdAt = now
-                                )
-                            )
-                        }
-                    }
+            for (time in expectedTimes) {
+                if (time == "PRN") continue
+                val key = med.id to time
+                if (key !in reconciledKeys) {
+                    newLogs.add(
+                        DoseLog(
+                            id = UUID.randomUUID().toString(),
+                            medicationId = med.id,
+                            scheduledDate = dateStr,
+                            scheduledTime = time,
+                            status = "pending",
+                            takenAt = null,
+                            createdAt = now
+                        )
+                    )
                 }
             }
         }
@@ -239,11 +352,61 @@ class MedsRepository(private val db: AppDatabase) {
             doseLogDao.upsert(log)
         }
 
+        // ── Step 3: Deduplicate — remove duplicate entries for the same
+        //    (medicationId, scheduledTime) on this date. This guards against
+        //    race conditions when multiple callers invoke ensureDoseLogsForDate
+        //    concurrently (ViewModel, AlarmScheduler, WorkManager, etc.).
+        val finalLogs = doseLogDao.getForDate(dateStr)
+        val grouped = finalLogs.groupBy { it.medicationId to it.scheduledTime }
+        for ((_, group) in grouped) {
+            if (group.size <= 1) continue
+            // Keep the log with the most significant status
+            val keeper = group.maxByOrNull { log ->
+                when (log.status) {
+                    "taken" -> 3
+                    "skipped" -> 2
+                    "missed" -> 1
+                    else -> 0
+                }
+            }!!
+            group.filter { it.id != keeper.id }.forEach { doseLogDao.deleteById(it.id) }
+        }
+
         return doseLogDao.getForDate(dateStr)
     }
 
     private fun shouldScheduleWeeklyDoseOnDate(med: Medication, date: LocalDate): Boolean {
-        val createdDate = try {
+        val createdDate = parseCreatedDate(med) ?: return false
+        return date.dayOfWeek == createdDate.dayOfWeek
+    }
+
+    /**
+     * For "every_other_day" frequency: check if the given date is an even number
+     * of days from the creation date (0, 2, 4, 6, …).
+     */
+    private fun shouldScheduleEveryOtherDay(med: Medication, date: LocalDate): Boolean {
+        val createdDate = parseCreatedDate(med) ?: return true
+        val daysBetween = ChronoUnit.DAYS.between(createdDate, date)
+        return daysBetween >= 0 && daysBetween % 2 == 0L
+    }
+
+    private fun expectedTimesForDate(med: Medication, date: LocalDate): Set<String> {
+        return when (med.frequency) {
+            "as_needed" -> setOf("PRN")
+            "weekly" -> if (shouldScheduleWeeklyDoseOnDate(med, date))
+                med.scheduledTimes.filter { it != "PRN" }.toSet() else emptySet()
+            "every_other_day" -> if (shouldScheduleEveryOtherDay(med, date))
+                med.scheduledTimes.filter { it != "PRN" }.toSet() else emptySet()
+            else -> med.scheduledTimes.filter { it != "PRN" }.toSet()
+        }
+    }
+
+    private fun parseTimeOrNull(time: String): LocalTime? {
+        return runCatching { LocalTime.parse(time) }.getOrNull()
+    }
+
+    private fun parseCreatedDate(med: Medication): LocalDate? {
+        return try {
             LocalDate.parse(med.createdAt.take(10))
         } catch (_: Exception) {
             try {
@@ -253,7 +416,6 @@ class MedsRepository(private val db: AppDatabase) {
                 null
             }
         }
-        return createdDate != null && date.dayOfWeek == createdDate.dayOfWeek
     }
 
     /**
@@ -341,6 +503,7 @@ class MedsRepository(private val db: AppDatabase) {
             val timesArr = org.json.JSONArray()
             med.scheduledTimes.forEach { timesArr.put(it) }
             obj.put("scheduledTimes", timesArr)
+            obj.put("doseIntervalHours", med.doseIntervalHours)
             obj.put("tabletsPerDose", med.tabletsPerDose)
             obj.put("currentStock", med.currentStock)
             obj.put("repeatsRemaining", med.repeatsRemaining)
@@ -419,6 +582,7 @@ class MedsRepository(private val db: AppDatabase) {
                         frequency = obj.optString("frequency", "daily"),
                         timesPerDay = obj.optInt("timesPerDay", 1),
                         scheduledTimes = times,
+                        doseIntervalHours = obj.optInt("doseIntervalHours", 6).coerceIn(1, 6),
                         tabletsPerDose = obj.optInt("tabletsPerDose", 1),
                         currentStock = obj.optInt("currentStock", 0),
                         repeatsRemaining = obj.optInt("repeatsRemaining", 0),

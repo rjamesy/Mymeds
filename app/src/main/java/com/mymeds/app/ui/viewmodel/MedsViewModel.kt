@@ -7,6 +7,7 @@ import com.mymeds.app.MyMedsApp
 import com.mymeds.app.data.model.*
 import com.mymeds.app.data.repository.MedsRepository
 import com.mymeds.app.notification.DoseAlarmScheduler
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -34,14 +35,25 @@ class MedsViewModel(application: Application) : AndroidViewModel(application) {
     private val _showAddStock = MutableStateFlow<String?>(null)
     val showAddStock: StateFlow<String?> = _showAddStock.asStateFlow()
 
+    // Track the current refresh coroutine so we can cancel stale ones.
+    // This prevents two overlapping ensureDoseLogsForDate calls that
+    // would race and create duplicate DoseLog rows.
+    private var refreshJob: Job? = null
+
     init {
         refreshDoses()
     }
 
     fun refreshDoses() {
-        viewModelScope.launch {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
             _todaysDoses.value = repo.generateTodaysDoses()
         }
+    }
+
+    suspend fun refreshDosesAndWait() {
+        refreshJob?.cancel()
+        _todaysDoses.value = repo.generateTodaysDoses()
     }
 
     fun takeDose(log: DoseLog) {
@@ -65,6 +77,25 @@ class MedsViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val med = repo.getMedicationById(log.medicationId) ?: return@launch
             repo.undoDose(log, med)
+            refreshDoses()
+            rescheduleAlarms()
+        }
+    }
+
+    fun updateDoseStatus(log: DoseLog, newStatus: String) {
+        viewModelScope.launch {
+            val med = repo.getMedicationById(log.medicationId) ?: return@launch
+            when (newStatus) {
+                "taken" -> {
+                    if (log.status == "taken") return@launch
+                    // Reset to pending first so takeDose properly decrements stock
+                    val resetLog = log.copy(status = "pending", takenAt = null)
+                    repo.takeDose(resetLog, med)
+                }
+                "missed" -> {
+                    repo.markMissed(log, med)
+                }
+            }
             refreshDoses()
             rescheduleAlarms()
         }
